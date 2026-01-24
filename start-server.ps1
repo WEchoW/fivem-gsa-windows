@@ -22,9 +22,10 @@ if (-not $iface) { $iface = "0.0.0.0" }
 
 $txaPort = $env:TXHOST_TXA_PORT
 if (-not $txaPort) { $txaPort = "40120" }  # fallback only
+$txaPort = [int]$txaPort
 
 Write-Host "DEBUG TXHOST_TXA_PORT=[$($env:TXHOST_TXA_PORT)] TXHOST_INTERFACE=[$($env:TXHOST_INTERFACE)]"
-Write-Host "Starting txAdmin on $iface:$txaPort (TXDATA=$tx)"
+Write-Host "Starting txAdmin on ${iface}:${txaPort} (TXDATA=$tx)"
 
 # Start server (txAdmin mode)
 & $fx +set txAdminInterface $iface +set txAdminPort $txaPort
