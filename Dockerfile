@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/windows/servercore:ltsc2022
 SHELL ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
 
 ENV FIVEM_HOME=C:\\fivem
-ENV TXDATA=/txdata
+ENV TXDATA=C:\\txdata
 
 # txAdmin web panel
 ENV TXHOST_INTERFACE=0.0.0.0
