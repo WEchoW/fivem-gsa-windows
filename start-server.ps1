@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 
 $fx = "C:\fivem\server\FXServer.exe"
 
-# Data path (Windows container path)
+# Data path
 $tx = $env:TXDATA
 if (-not $tx) { $tx = "C:\txdata" }
 
