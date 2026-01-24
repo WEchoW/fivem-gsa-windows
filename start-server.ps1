@@ -16,26 +16,20 @@ if (!(Test-Path $fx)) {
 New-Item -ItemType Directory -Force -Path $tx | Out-Null
 Set-Location $tx
 
-# --- Pick txAdmin port ---
-# Preferred: new txAdmin env var
+# --- txAdmin bind + port (prefer new env vars) ---
+$iface = $env:TXHOST_INTERFACE
+if (-not $iface) { $iface = "0.0.0.0" }
+
 $txaPort = $env:TXHOST_TXA_PORT
-
-# Fallback: old env var (if you set it manually)
 if (-not $txaPort) { $txaPort = $env:TXADMIN_PORT }
-
-# Fallback: GSA "other" port (auto-assigned by panel)
-# Commonly exposed by panels as GSA_PORT_OTHER; harmless if missing.
-if (-not $txaPort) { $txaPort = $env:GSA_PORT_OTHER }
-
-# Final fallback
 if (-not $txaPort) { $txaPort = "40120" }
 
 Write-Host "=================================================="
 Write-Host "Starting FXServer (txAdmin first-run mode)"
 Write-Host "TXDATA: $tx"
-Write-Host "txAdmin bind: 0.0.0.0"
+Write-Host "txAdmin bind: $iface"
 Write-Host "txAdmin port: $txaPort"
 Write-Host "=================================================="
 
 # Start txAdmin mode
-& $fx +set txAdminInterface 0.0.0.0 +set txAdminPort $txaPort
+& $fx +set txAdminInterface $iface +set txAdminPort $txaPort
