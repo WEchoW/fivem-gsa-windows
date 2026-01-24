@@ -1,29 +1,29 @@
-# Dockerfile (Windows container)
 FROM mcr.microsoft.com/windows/servercore:ltsc2022
 
-SHELL ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+SHELL ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
 
-# ---- Defaults ----
-ENV TXDATA="C:\\txdata" `
-    TXADMIN_PORT="40120"
+# Use escaped backslashes so Dockerfile parsing doesn't treat \t, \f as escapes
+ENV FIVEM_HOME="C:\\fivem"
+ENV TXDATA="C:\\txdata"
+ENV TXADMIN_PORT="40120"
 
-# Allow overriding the artifact at build time if desired
-ARG FXSERVER_ARTIFACT_URL=""
-ENV FXSERVER_ARTIFACT_URL=$FXSERVER_ARTIFACT_URL
+# Base folders
+RUN New-Item -ItemType Directory -Force -Path "C:\\gsa" | Out-Null; `
+    New-Item -ItemType Directory -Force -Path $env:FIVEM_HOME | Out-Null; `
+    New-Item -ItemType Directory -Force -Path $env:TXDATA | Out-Null
 
-# ---- Working dir ----
-WORKDIR C:\
+# Copy + run installer (this script downloads and extracts FXServer)
+COPY install-fxserver.ps1 C:\\gsa\\install-fxserver.ps1
+RUN powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\gsa\\install-fxserver.ps1
 
-# ---- Copy scripts ----
-COPY install-fxserver.ps1 C:\install-fxserver.ps1
-COPY start-server.ps1     C:\start-server.ps1
+# VC++ runtime (common requirement)
+RUN Invoke-WebRequest "https://aka.ms/vs/16/release/VC_redist.x64.exe" -OutFile "C:\\gsa\\VC_redist.x64.exe"; `
+    Start-Process "C:\\gsa\\VC_redist.x64.exe" -ArgumentList "/install","/quiet","/norestart" -Wait
 
-# ---- Install FXServer + prereqs ----
-RUN C:\install-fxserver.ps1
+# Start script
+COPY start-server.ps1 C:\\gsa\\start-server.ps1
 
-# ---- Ports (documentation; real ports come from -p / your panel) ----
-# Matches your blueprint ports: 31120/31121 game/raw, 40120 txAdmin, 41120 query, 42120 rcon
+# Ports are documentation; GSA maps ports externally
 EXPOSE 31120/udp 31120/tcp 31121/tcp 40120/tcp 41120/tcp 42120/tcp
 
-# ---- Start ----
-ENTRYPOINT ["powershell","-NoProfile","-ExecutionPolicy","Bypass","-File","C:\\start-server.ps1"]
+ENTRYPOINT ["powershell.exe","-NoProfile","-ExecutionPolicy","Bypass","-File","C:\\gsa\\start-server.ps1"]
