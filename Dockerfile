@@ -4,6 +4,8 @@ SHELL ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
 
 ENV FIVEM_HOME=C:\\fivem
 ENV TXDATA=C:\\txdata
+
+# txAdmin web panel (reserved port, do NOT use for FXServer endpoints)
 ENV TXHOST_INTERFACE=0.0.0.0
 ENV TXHOST_TXA_PORT=40120
 
@@ -16,6 +18,7 @@ COPY start-server.ps1     C:/gsa/start-server.ps1
 
 RUN powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/gsa/install-fxserver.ps1
 
+# FiveM (game) + txAdmin (panel)
 EXPOSE 30120/udp 30120/tcp 40120/tcp
 
 ENTRYPOINT ["powershell.exe","-NoProfile","-ExecutionPolicy","Bypass","-File","C:/gsa/start-server.ps1"]
