@@ -47,14 +47,19 @@ jobs:
         run: |
           docker build --no-cache -t "${{ env.IMAGE }}:build" .
 
-      # Verify WITHOUT starting the server (override ENTRYPOINT)
+      # BULLETPROOF: cmd -> powershell to avoid YAML/pwsh/docker quoting issues
       - name: Verify start-server.ps1 is patched in image
         shell: pwsh
         run: |
-          docker run --rm --entrypoint powershell `
-            "${{ env.IMAGE }}:build" `
-            -NoProfile -ExecutionPolicy Bypass `
-            -Command "$c = Get-Content 'C:\gsa\start-server.ps1' -Raw; if ($c -notlike '*${iface}:${txaPort}*') { Write-Host '❌ Patch not found'; exit 1 } else { Write-Host '✅ Patch found' }"
+          docker run --rm --entrypoint cmd `
+            "${{ env.IMAGE }}:build" /c ^
+            "powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+            ""$c = Get-Content 'C:\gsa\start-server.ps1' -Raw; ^
+              if ($c.IndexOf('Starting txAdmin on ') -lt 0) { ^
+                Write-Host '❌ Patch not found'; exit 1 ^
+              } else { ^
+                Write-Host '✅ Patch found' ^
+              }"""
 
       - name: Tag image (latest + sha)
         shell: pwsh
