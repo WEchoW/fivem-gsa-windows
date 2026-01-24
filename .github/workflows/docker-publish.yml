@@ -2,7 +2,7 @@ name: Build and publish Windows Docker image (GHCR)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
     tags:
       - "v*.*.*"
   workflow_dispatch:
@@ -30,11 +30,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image (classic docker build)
+      - name: Build image (no cache)
         shell: pwsh
         run: |
           $image = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          docker build -t "${image}:latest" .
+          docker build --no-cache -t "${image}:latest" .
+
+      # Sanity check: prove the fixed line is inside the built image
+      - name: Verify start-server.ps1 is patched in image
+        shell: pwsh
+        run: |
+          $image = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          # Create a stopped container and read the file out of it
+          $cid = docker create "${image}:latest"
+          docker start $cid | Out-Null
+          docker exec $cid powershell -NoProfile -Command "Select-String -Path C:\gsa\start-server.ps1 -Pattern 'Starting txAdmin on \${iface}:\${txaPort}' -Quiet; if (-not $?) { exit 1 }"
+          docker rm -f $cid | Out-Null
+          Write-Host "✅ Verified: start-server.ps1 contains the fixed ${iface}:${txaPort} line."
 
       - name: Push image (latest)
         shell: pwsh
