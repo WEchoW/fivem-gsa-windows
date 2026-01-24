@@ -1,3 +1,4 @@
+# install-fxserver.ps1
 $ErrorActionPreference = "Stop"
 
 # Ensure TLS 1.2
@@ -11,14 +12,14 @@ if (-not $zipUrl) {
 
 Write-Host "FXServer artifact URL: $zipUrl"
 
-$serverRoot  = "C:\fivem\server"
-$tempDir     = "C:\temp"
-$sevenZip    = "C:\7zip"
-$sevenZipExe = Join-Path $sevenZip "7zr.exe"
+$serverRoot   = "C:\fivem\server"
+$tempDir      = "C:\temp"
+$sevenZipDir  = "C:\7zip"
+$sevenZipExe  = Join-Path $sevenZipDir "7zr.exe"
 
-New-Item -ItemType Directory -Force -Path $serverRoot | Out-Null
-New-Item -ItemType Directory -Force -Path $tempDir    | Out-Null
-New-Item -ItemType Directory -Force -Path $sevenZip   | Out-Null
+New-Item -ItemType Directory -Force -Path $serverRoot  | Out-Null
+New-Item -ItemType Directory -Force -Path $tempDir     | Out-Null
+New-Item -ItemType Directory -Force -Path $sevenZipDir | Out-Null
 
 # VC++ Runtime
 $vcUrl  = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
