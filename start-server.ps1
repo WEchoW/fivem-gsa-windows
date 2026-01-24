@@ -3,9 +3,9 @@ $ErrorActionPreference = "Stop"
 
 $fx = "C:\fivem\server\FXServer.exe"
 
-# Data path (NO colon paths; GSA volume parser-safe)
+# Data path (Windows container path)
 $tx = $env:TXDATA
-if (-not $tx) { $tx = "/txdata" }
+if (-not $tx) { $tx = "C:\txdata" }
 
 if (!(Test-Path $fx)) {
   Write-Host "ERROR: Missing FXServer.exe at $fx"
