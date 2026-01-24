@@ -1,9 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 # Ensure TLS 1.2
-try {
-  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-} catch {}
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 
 # Configurable artifact URL
 $zipUrl = $env:FXSERVER_ARTIFACT_URL
@@ -13,9 +11,9 @@ if (-not $zipUrl) {
 
 Write-Host "FXServer artifact URL: $zipUrl"
 
-$serverRoot = "C:\fivem\server"
-$tempDir    = "C:\temp"
-$sevenZip   = "C:\7zip"
+$serverRoot  = "C:\fivem\server"
+$tempDir     = "C:\temp"
+$sevenZip    = "C:\7zip"
 $sevenZipExe = Join-Path $sevenZip "7zr.exe"
 
 New-Item -ItemType Directory -Force -Path $serverRoot | Out-Null
