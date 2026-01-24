@@ -34,13 +34,13 @@ jobs:
         shell: pwsh
         run: |
           $image = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          docker build -t "$image:latest" .
+          docker build -t "${image}:latest" .
 
       - name: Push image (latest)
         shell: pwsh
         run: |
           $image = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          docker push "$image:latest"
+          docker push "${image}:latest"
 
       - name: Tag + push version (only on tag pushes)
         if: startsWith(github.ref, 'refs/tags/')
@@ -48,5 +48,5 @@ jobs:
         run: |
           $image = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           $tag = "${{ github.ref_name }}"
-          docker tag "$image:latest" "$image:$tag"
-          docker push "$image:$tag"
+          docker tag "${image}:latest" "${image}:$tag"
+          docker push "${image}:$tag"
