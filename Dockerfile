@@ -18,6 +18,7 @@ RUN powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/gsa/install-fxser
 
 COPY start-server.ps1     C:/gsa/start-server.ps1
 
+# FiveM (game) + txAdmin (panel)
 EXPOSE 30120/udp 30120/tcp 40120/tcp
 
 ENTRYPOINT ["powershell.exe","-NoProfile","-ExecutionPolicy","Bypass","-File","C:/gsa/start-server.ps1"]
