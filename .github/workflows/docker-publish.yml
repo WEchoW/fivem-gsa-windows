@@ -30,35 +30,48 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set image tags
+        shell: pwsh
+        run: |
+          $image = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          $shortSha = "${{ github.sha }}".Substring(0,7)
+
+          "IMAGE=$image" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "SHORT_SHA=$shortSha" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          Write-Host "Image: $image"
+          Write-Host "Short SHA tag: sha-$shortSha"
+
       - name: Build image (no cache)
         shell: pwsh
         run: |
-          $image = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          docker build --no-cache -t "${image}:latest" .
+          docker build --no-cache -t "${{ env.IMAGE }}:build" .
 
-      # Sanity check: prove the fixed line is inside the built image
+      # Sanity check: confirm the fixed line is inside the built image
       - name: Verify start-server.ps1 is patched in image
         shell: pwsh
         run: |
-          $image = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          # Create a stopped container and read the file out of it
-          $cid = docker create "${image}:latest"
-          docker start $cid | Out-Null
-          docker exec $cid powershell -NoProfile -Command "Select-String -Path C:\gsa\start-server.ps1 -Pattern 'Starting txAdmin on \${iface}:\${txaPort}' -Quiet; if (-not $?) { exit 1 }"
-          docker rm -f $cid | Out-Null
+          docker run --rm "${{ env.IMAGE }}:build" powershell -NoProfile -Command `
+            "Select-String -Path C:\gsa\start-server.ps1 -Pattern 'Starting txAdmin on \${iface}:\${txaPort}' -Quiet; if (-not $?) { exit 1 }"
           Write-Host "✅ Verified: start-server.ps1 contains the fixed ${iface}:${txaPort} line."
 
-      - name: Push image (latest)
+      - name: Tag image (latest + sha)
         shell: pwsh
         run: |
-          $image = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          docker push "${image}:latest"
+          docker tag "${{ env.IMAGE }}:build" "${{ env.IMAGE }}:latest"
+          docker tag "${{ env.IMAGE }}:build" "${{ env.IMAGE }}:sha-${{ env.SHORT_SHA }}"
+
+      - name: Push image (latest + sha)
+        shell: pwsh
+        run: |
+          docker push "${{ env.IMAGE }}:latest"
+          docker push "${{ env.IMAGE }}:sha-${{ env.SHORT_SHA }}"
 
       - name: Tag + push version (only on tag pushes)
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         run: |
-          $image = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           $tag = "${{ github.ref_name }}"
-          docker tag "${image}:latest" "${image}:$tag"
-          docker push "${image}:$tag"
+          docker tag "${{ env.IMAGE }}:build" "${{ env.IMAGE }}:$tag"
+          docker push "${{ env.IMAGE }}:$tag"
+          Write-Host "✅ Pushed version tag: $tag"
