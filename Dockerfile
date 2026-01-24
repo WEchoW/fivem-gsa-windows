@@ -3,14 +3,11 @@ FROM mcr.microsoft.com/windows/servercore:ltsc2022
 SHELL ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
 
 ENV FIVEM_HOME=C:\\fivem
-ENV TXDATA=C:\\txdata
+ENV TXDATA=/txdata
 
-# txAdmin web panel (reserved port, do NOT use for FXServer endpoints)
+# txAdmin web panel
 ENV TXHOST_INTERFACE=0.0.0.0
 ENV TXHOST_TXA_PORT=40120
-
-ARG BUILD_DATE=unknown
-LABEL org.opencontainers.image.created=$BUILD_DATE
 
 WORKDIR C:/gsa
 
