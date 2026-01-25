@@ -1,49 +1,81 @@
 # install-fxserver.ps1
 $ErrorActionPreference = "Stop"
 
-# Ensure TLS 1.2
-try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
+$fivemHome = $env:FIVEM_HOME
+if (-not $fivemHome) { $fivemHome = "C:\fivem" }
 
-# Configurable artifact URL
-$zipUrl = $env:FXSERVER_ARTIFACT_URL
-if (-not $zipUrl) {
-  $zipUrl = "https://runtime.fivem.net/artifacts/fivem/build_server_windows/master/24769-315823736cfbc085104ca0d32779311cd2f1a5a8/server.7z"
+$serverDir = Join-Path $fivemHome "server"
+$fxExe = Join-Path $serverDir "FXServer.exe"
+
+New-Item -ItemType Directory -Force -Path $fivemHome | Out-Null
+New-Item -ItemType Directory -Force -Path $serverDir | Out-Null
+
+if (Test-Path $fxExe) {
+  Write-Host "FXServer already installed at $fxExe - skipping."
+  exit 0
 }
 
-Write-Host "FXServer artifact URL: $zipUrl"
+function Get-LatestArtifactZipUrl {
+  param(
+    [Parameter(Mandatory=$true)][ValidateSet("recommended","master")] $Channel
+  )
 
-$serverRoot   = "C:\fivem\server"
-$tempDir      = "C:\temp"
-$sevenZipDir  = "C:\7zip"
-$sevenZipExe  = Join-Path $sevenZipDir "7zr.exe"
+  # These endpoints are commonly used for FiveM artifacts
+  $base =
+    if ($Channel -eq "recommended") {
+      "https://runtime.fivem.net/artifacts/fivem/build_server_windows/recommended/"
+    } else {
+      "https://runtime.fivem.net/artifacts/fivem/build_server_windows/master/"
+    }
 
-New-Item -ItemType Directory -Force -Path $serverRoot  | Out-Null
-New-Item -ItemType Directory -Force -Path $tempDir     | Out-Null
-New-Item -ItemType Directory -Force -Path $sevenZipDir | Out-Null
+  Write-Host "Fetching artifacts index: $base"
+  $html = (Invoke-WebRequest -UseBasicParsing -Uri $base).Content
 
-# VC++ Runtime
-$vcUrl  = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
-$vcPath = Join-Path $tempDir "vc_redist.x64.exe"
-Invoke-WebRequest -Uri $vcUrl -OutFile $vcPath -UseBasicParsing
-Start-Process -FilePath $vcPath -ArgumentList "/install","/quiet","/norestart" -Wait
+  # Find all .zip links and choose the last/highest one (page is typically sorted ascending)
+  $zipLinks = [regex]::Matches($html, 'href="([^"]+\.zip)"') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
+  if (-not $zipLinks -or $zipLinks.Count -lt 1) {
+    throw "Could not find any .zip artifacts at $base"
+  }
 
-# 7-Zip extractor
-$sevenZipUrl = "https://www.7-zip.org/a/7zr.exe"
-Invoke-WebRequest -Uri $sevenZipUrl -OutFile $sevenZipExe -UseBasicParsing
+  # Prefer server.zip if present, otherwise any zip
+  $preferred = $zipLinks | Where-Object { $_ -match 'server.*\.zip$' }
+  $pick = if ($preferred.Count -gt 0) { $preferred[-1] } else { $zipLinks[-1] }
 
-# Download FXServer
-$artifactPath = Join-Path $tempDir "server.7z"
-Invoke-WebRequest -Uri $zipUrl -OutFile $artifactPath -UseBasicParsing
-
-# Extract
-& $sevenZipExe x $artifactPath "-o$serverRoot" -y | Out-Null
-
-$fx = Join-Path $serverRoot "FXServer.exe"
-if (!(Test-Path $fx)) {
-  Write-Host "ERROR: FXServer.exe not found after extraction."
-  Write-Host "Contents of ${serverRoot}:"
-  Get-ChildItem $serverRoot -Force | Format-Table -AutoSize | Out-String | Write-Host
-  throw "FXServer.exe missing"
+  # If link is relative, make it absolute
+  if ($pick -notmatch '^https?://') {
+    return ($base.TrimEnd('/') + "/" + $pick.TrimStart('/'))
+  }
+  return $pick
 }
 
-Write-Host "FXServer installed successfully at $fx"
+# Allow direct override
+$artifactUrl = $env:FXSERVER_ARTIFACT_URL
+$channel = $env:FXSERVER_CHANNEL
+if (-not $channel) { $channel = "recommended" }
+
+if (-not $artifactUrl) {
+  $artifactUrl = Get-LatestArtifactZipUrl -Channel $channel
+}
+
+Write-Host "Downloading FXServer artifact: $artifactUrl"
+
+$tempZip = Join-Path $env:TEMP "fxserver.zip"
+if (Test-Path $tempZip) { Remove-Item $tempZip -Force -ErrorAction SilentlyContinue }
+
+Invoke-WebRequest -UseBasicParsing -Uri $artifactUrl -OutFile $tempZip
+
+# Clean existing server dir (but keep folder)
+Get-ChildItem -Path $serverDir -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+Write-Host "Extracting to: $serverDir"
+Expand-Archive -Path $tempZip -DestinationPath $serverDir -Force
+
+Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
+
+if (!(Test-Path $fxExe)) {
+  Write-Host "Directory contents:"
+  Get-ChildItem $serverDir -Force | Format-Table -AutoSize | Out-String | Write-Host
+  throw "Install finished but FXServer.exe not found at $fxExe"
+}
+
+Write-Host "FXServer installed OK: $fxExe"
