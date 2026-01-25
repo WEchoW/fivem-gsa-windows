@@ -1,7 +1,10 @@
-# install-fxserver.ps1 (PINNED BUILD)
+# install-fxserver.ps1
+# Installs FXServer artifacts into ARTIFACTS_DIR (default: C:\FiveM\artifacts)
+# Override download URL via env ARTIFACT_URL if you want to pin a different build.
+# Set FORCE_ARTIFACT_UPDATE=1 to reinstall even if FXServer.exe exists.
+
 $ErrorActionPreference = "Stop"
 
-# Force TLS 1.2 (ServerCore can default to older protocols)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $root = $env:FIVEM_ROOT
@@ -15,7 +18,6 @@ New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
 
 $fxExe = Join-Path $artifacts "FXServer.exe"
 
-# Optional: set FORCE_ARTIFACT_UPDATE=1 in blueprint to reinstall even if present
 $force = $env:FORCE_ARTIFACT_UPDATE
 if ((Test-Path $fxExe) -and ($force -ne "1")) {
   Write-Host "FXServer already present at $fxExe - skipping."
@@ -26,9 +28,12 @@ if ($force -eq "1") {
   Write-Host "FORCE_ARTIFACT_UPDATE=1 -> reinstalling artifacts."
 }
 
-# Your pinned artifact URL
-$artifactUrl = "https://runtime.fivem.net/artifacts/fivem/build_server_windows/master/24769-315823736cfbc085104ca0d32779311cd2f1a5a8/server.7z"
-Write-Host "Downloading pinned artifact: $artifactUrl"
+# Default pinned artifact (override with ARTIFACT_URL in the blueprint if you want)
+$defaultArtifactUrl = "https://runtime.fivem.net/artifacts/fivem/build_server_windows/master/24769-315823736cfbc085104ca0d32779311cd2f1a5a8/server.7z"
+$artifactUrl = $env:ARTIFACT_URL
+if (-not $artifactUrl) { $artifactUrl = $defaultArtifactUrl }
+
+Write-Host "Downloading FXServer artifact: $artifactUrl"
 
 $temp7z = Join-Path $env:TEMP "fxserver.7z"
 if (Test-Path $temp7z) { Remove-Item $temp7z -Force -ErrorAction SilentlyContinue }
