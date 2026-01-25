@@ -39,23 +39,46 @@ jobs:
           "IMAGE=$image" | Out-File -FilePath $env:GITHUB_ENV -Append
           "SHORT_SHA=$shortSha" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-          Write-Host "Image: $image"
-          Write-Host "Short SHA tag: sha-$shortSha"
-
       - name: Build image (no cache)
         shell: pwsh
         run: |
           docker build --no-cache -t "${{ env.IMAGE }}:build" .
 
+      # 🔍 REAL verification (prints offenders)
       - name: Verify start-server.ps1 is GSA-synced
         shell: pwsh
         run: |
           $cmd = @'
+          Write-Host "=== start-server.ps1 (first 120 lines) ==="
+          Get-Content "C:\gsa\start-server.ps1" -TotalCount 120
+
+          Write-Host "`n=== Searching for deprecated strings in C:\gsa ==="
+          Get-ChildItem "C:\gsa" -Recurse -File | ForEach-Object {
+            $p = $_.FullName
+            $t = Get-Content $p -Raw -ErrorAction SilentlyContinue
+            if ($t -match "txAdminPort" -or $t -match "txAdminInterface") {
+              Write-Host "FOUND in: $p"
+            }
+          }
+
           $c = Get-Content "C:\gsa\start-server.ps1" -Raw
-          if ($c -match "txAdminPort" -or $c -match "txAdminInterface") { Write-Host "❌ Deprecated txAdmin convars still present"; exit 1 }
-          if ($c -notmatch "TXHOST_TXA_PORT" -or $c -notmatch "FIVEM_GAME_PORT") { Write-Host "❌ Expected env vars missing"; exit 1 }
-          if ($c -notmatch "endpoint_add_udp" -or $c -notmatch "endpoint_add_tcp") { Write-Host "❌ Game endpoint binding missing"; exit 1 }
-          Write-Host "✅ Script is GSA-synced"
+
+          if ($c -match "txAdminPort" -or $c -match "txAdminInterface") {
+            Write-Host "❌ Deprecated txAdmin convars still present"
+            exit 1
+          }
+
+          if ($c -notmatch "TXHOST_TXA_PORT" -or $c -notmatch "FIVEM_GAME_PORT") {
+            Write-Host "❌ Missing GSA env vars"
+            exit 1
+          }
+
+          if ($c -notmatch "endpoint_add_udp" -or $c -notmatch "endpoint_add_tcp") {
+            Write-Host "❌ Game endpoint binding missing"
+            exit 1
+          }
+
+          Write-Host "✅ start-server.ps1 is GSA synced"
           '@
 
           docker run --rm --entrypoint powershell "${{ env.IMAGE }}:build" -NoProfile -ExecutionPolicy Bypass -Command $cmd
@@ -79,4 +102,3 @@ jobs:
           $tag = "${{ github.ref_name }}"
           docker tag "${{ env.IMAGE }}:build" "${{ env.IMAGE }}:$tag"
           docker push "${{ env.IMAGE }}:$tag"
-          Write-Host "✅ Pushed version tag: $tag"
