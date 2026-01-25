@@ -1,67 +1,60 @@
 # install-fxserver.ps1
 $ErrorActionPreference = "Stop"
 
-$fivemHome = $env:FIVEM_HOME
-if (-not $fivemHome) { $fivemHome = "C:\fivem" }
+$root = $env:FIVEM_ROOT; if (-not $root) { $root = "C:\FiveM" }
+$artifacts = $env:ARTIFACTS_DIR; if (-not $artifacts) { $artifacts = Join-Path $root "artifacts" }
 
-$serverDir = Join-Path $fivemHome "server"
-$fxExe = Join-Path $serverDir "FXServer.exe"
+$fxExe = Join-Path $artifacts "FXServer.exe"
 
-New-Item -ItemType Directory -Force -Path $fivemHome | Out-Null
-New-Item -ItemType Directory -Force -Path $serverDir | Out-Null
+New-Item -ItemType Directory -Force -Path $root | Out-Null
+New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
+
+Write-Host "INSTALL: root=$root"
+Write-Host "INSTALL: artifacts=$artifacts"
+Write-Host "INSTALL: fxExe=$fxExe"
 
 if (Test-Path $fxExe) {
   Write-Host "FXServer already installed at $fxExe - skipping."
   exit 0
 }
 
-function Get-LatestRecommendedArtifactUrl {
-  # NOTE: "recommended/" endpoint can 404 now; master contains "LATEST RECOMMENDED"
+function Get-LatestRecommended7zUrl {
   $indexUrl = "https://runtime.fivem.net/artifacts/fivem/build_server_windows/master/"
   Write-Host "Fetching artifacts index: $indexUrl"
 
   $html = (Invoke-WebRequest -UseBasicParsing -Uri $indexUrl).Content
 
-  # Try to find the href for "LATEST RECOMMENDED"
-  # Page contains something like: LATEST RECOMMENDED (...) <a href=".../server.7z">
-  $m = [regex]::Match($html, 'LATEST RECOMMENDED.*?href="([^"]*server\.7z)"', 'Singleline,IgnoreCase')
+  # Robust: find the section containing "LATEST RECOMMENDED", then find the first server.7z href after it
+  $idx = $html.IndexOf("LATEST RECOMMENDED")
+  if ($idx -lt 0) { throw "Could not find 'LATEST RECOMMENDED' on artifacts page." }
 
-  if (-not $m.Success) {
-    # fallback: first server.7z on the page
-    $m = [regex]::Match($html, 'href="([^"]*server\.7z)"', 'Singleline,IgnoreCase')
-  }
-
-  if (-not $m.Success) {
-    throw "Could not find server.7z link on artifacts index."
-  }
+  $tail = $html.Substring($idx)
+  $m = [regex]::Match($tail, 'href="([^"]*server\.7z)"', 'Singleline,IgnoreCase')
+  if (-not $m.Success) { throw "Could not find server.7z link under LATEST RECOMMENDED." }
 
   $href = $m.Groups[1].Value
-
-  # make absolute if needed
   if ($href -notmatch '^https?://') {
-    $base = $indexUrl.TrimEnd('/')
-    $href = "$base/$($href.TrimStart('/'))"
+    $href = ($indexUrl.TrimEnd('/') + "/" + $href.TrimStart('/'))
   }
-
   return $href
 }
 
 function Ensure-7zr {
-  param([string]$Path)
+  param([string]$SevenPath)
+  if (Test-Path $SevenPath) { return }
 
-  if (Test-Path $Path) { return }
-
-  # Small standalone 7zip extractor (7zr.exe) from official 7-zip site
   $url = "https://www.7-zip.org/a/7zr.exe"
-  Write-Host "Downloading 7zr.exe: $url"
-  Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $Path
+  Write-Host "Downloading extractor: $url -> $SevenPath"
+  Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $SevenPath
+
+  if (!(Test-Path $SevenPath)) {
+    throw "Failed to download 7zr.exe to $SevenPath"
+  }
 }
 
-# Allow direct override
+# Allow pinning/override if you want
 $artifactUrl = $env:FXSERVER_ARTIFACT_URL
-if (-not $artifactUrl) {
-  $artifactUrl = Get-LatestRecommendedArtifactUrl
-}
+if (-not $artifactUrl) { $artifactUrl = Get-LatestRecommended7zUrl }
 
 Write-Host "Downloading FXServer artifact: $artifactUrl"
 
@@ -69,33 +62,25 @@ $temp7z = Join-Path $env:TEMP "fxserver.7z"
 if (Test-Path $temp7z) { Remove-Item $temp7z -Force -ErrorAction SilentlyContinue }
 
 Invoke-WebRequest -UseBasicParsing -Uri $artifactUrl -OutFile $temp7z
+Write-Host "Downloaded: $temp7z ($(Get-Item $temp7z).Length bytes)"
 
-# Clean existing server dir contents (keep folder)
-Get-ChildItem -Path $serverDir -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+# Clean artifacts folder
+Write-Host "Cleaning artifacts dir: $artifacts"
+Get-ChildItem -Path $artifacts -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
-# Try native tar first (sometimes supports 7z via libarchive)
-$extracted = $false
-try {
-  Write-Host "Trying extraction via tar..."
-  & tar -xf $temp7z -C $serverDir
-  if (Test-Path $fxExe) { $extracted = $true }
-} catch {
-  $extracted = $false
-}
+# Extract with 7zr
+$seven = Join-Path $env:TEMP "7zr.exe"
+Ensure-7zr -SevenPath $seven
 
-if (-not $extracted) {
-  $seven = Join-Path $env:TEMP "7zr.exe"
-  Ensure-7zr -Path $seven
-
-  Write-Host "Extracting via 7zr.exe..."
-  & $seven x -y "-o$serverDir" $temp7z | Out-Host
-}
+Write-Host "Extracting: $temp7z -> $artifacts"
+& $seven x -y "-o$artifacts" $temp7z | Out-Host
 
 Remove-Item $temp7z -Force -ErrorAction SilentlyContinue
 
+Write-Host "Post-extract listing (top 30):"
+Get-ChildItem -Path $artifacts -Force | Select-Object -First 30 Name,Length | Format-Table -AutoSize | Out-String | Write-Host
+
 if (!(Test-Path $fxExe)) {
-  Write-Host "Directory contents:"
-  Get-ChildItem $serverDir -Force | Format-Table -AutoSize | Out-String | Write-Host
   throw "Install finished but FXServer.exe not found at $fxExe"
 }
 
