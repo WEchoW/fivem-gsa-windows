@@ -15,62 +15,83 @@ if (Test-Path $fxExe) {
   exit 0
 }
 
-function Get-LatestArtifactZipUrl {
-  param(
-    [Parameter(Mandatory=$true)][ValidateSet("recommended","master")] $Channel
-  )
+function Get-LatestRecommendedArtifactUrl {
+  # NOTE: "recommended/" endpoint can 404 now; master contains "LATEST RECOMMENDED"
+  $indexUrl = "https://runtime.fivem.net/artifacts/fivem/build_server_windows/master/"
+  Write-Host "Fetching artifacts index: $indexUrl"
 
-  # These endpoints are commonly used for FiveM artifacts
-  $base =
-    if ($Channel -eq "recommended") {
-      "https://runtime.fivem.net/artifacts/fivem/build_server_windows/recommended/"
-    } else {
-      "https://runtime.fivem.net/artifacts/fivem/build_server_windows/master/"
-    }
+  $html = (Invoke-WebRequest -UseBasicParsing -Uri $indexUrl).Content
 
-  Write-Host "Fetching artifacts index: $base"
-  $html = (Invoke-WebRequest -UseBasicParsing -Uri $base).Content
+  # Try to find the href for "LATEST RECOMMENDED"
+  # Page contains something like: LATEST RECOMMENDED (...) <a href=".../server.7z">
+  $m = [regex]::Match($html, 'LATEST RECOMMENDED.*?href="([^"]*server\.7z)"', 'Singleline,IgnoreCase')
 
-  # Find all .zip links and choose the last/highest one (page is typically sorted ascending)
-  $zipLinks = [regex]::Matches($html, 'href="([^"]+\.zip)"') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
-  if (-not $zipLinks -or $zipLinks.Count -lt 1) {
-    throw "Could not find any .zip artifacts at $base"
+  if (-not $m.Success) {
+    # fallback: first server.7z on the page
+    $m = [regex]::Match($html, 'href="([^"]*server\.7z)"', 'Singleline,IgnoreCase')
   }
 
-  # Prefer server.zip if present, otherwise any zip
-  $preferred = $zipLinks | Where-Object { $_ -match 'server.*\.zip$' }
-  $pick = if ($preferred.Count -gt 0) { $preferred[-1] } else { $zipLinks[-1] }
-
-  # If link is relative, make it absolute
-  if ($pick -notmatch '^https?://') {
-    return ($base.TrimEnd('/') + "/" + $pick.TrimStart('/'))
+  if (-not $m.Success) {
+    throw "Could not find server.7z link on artifacts index."
   }
-  return $pick
+
+  $href = $m.Groups[1].Value
+
+  # make absolute if needed
+  if ($href -notmatch '^https?://') {
+    $base = $indexUrl.TrimEnd('/')
+    $href = "$base/$($href.TrimStart('/'))"
+  }
+
+  return $href
+}
+
+function Ensure-7zr {
+  param([string]$Path)
+
+  if (Test-Path $Path) { return }
+
+  # Small standalone 7zip extractor (7zr.exe) from official 7-zip site
+  $url = "https://www.7-zip.org/a/7zr.exe"
+  Write-Host "Downloading 7zr.exe: $url"
+  Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $Path
 }
 
 # Allow direct override
 $artifactUrl = $env:FXSERVER_ARTIFACT_URL
-$channel = $env:FXSERVER_CHANNEL
-if (-not $channel) { $channel = "recommended" }
-
 if (-not $artifactUrl) {
-  $artifactUrl = Get-LatestArtifactZipUrl -Channel $channel
+  $artifactUrl = Get-LatestRecommendedArtifactUrl
 }
 
 Write-Host "Downloading FXServer artifact: $artifactUrl"
 
-$tempZip = Join-Path $env:TEMP "fxserver.zip"
-if (Test-Path $tempZip) { Remove-Item $tempZip -Force -ErrorAction SilentlyContinue }
+$temp7z = Join-Path $env:TEMP "fxserver.7z"
+if (Test-Path $temp7z) { Remove-Item $temp7z -Force -ErrorAction SilentlyContinue }
 
-Invoke-WebRequest -UseBasicParsing -Uri $artifactUrl -OutFile $tempZip
+Invoke-WebRequest -UseBasicParsing -Uri $artifactUrl -OutFile $temp7z
 
-# Clean existing server dir (but keep folder)
+# Clean existing server dir contents (keep folder)
 Get-ChildItem -Path $serverDir -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Host "Extracting to: $serverDir"
-Expand-Archive -Path $tempZip -DestinationPath $serverDir -Force
+# Try native tar first (sometimes supports 7z via libarchive)
+$extracted = $false
+try {
+  Write-Host "Trying extraction via tar..."
+  & tar -xf $temp7z -C $serverDir
+  if (Test-Path $fxExe) { $extracted = $true }
+} catch {
+  $extracted = $false
+}
 
-Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
+if (-not $extracted) {
+  $seven = Join-Path $env:TEMP "7zr.exe"
+  Ensure-7zr -Path $seven
+
+  Write-Host "Extracting via 7zr.exe..."
+  & $seven x -y "-o$serverDir" $temp7z | Out-Host
+}
+
+Remove-Item $temp7z -Force -ErrorAction SilentlyContinue
 
 if (!(Test-Path $fxExe)) {
   Write-Host "Directory contents:"
