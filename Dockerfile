@@ -11,7 +11,10 @@ ENV TXHOST_TXA_PORT=40120
 
 WORKDIR C:/gsa
 
-RUN New-Item -ItemType Directory -Force -Path 'C:\gsa' | Out-Null
+# --- FIX: Update trusted root certificates inside ServerCore (fixes SSL failures to cfx endpoints) ---
+RUN certutil -generateSSTFromWU C:\gsa\roots.sst; \
+    certutil -addstore -f root C:\gsa\roots.sst; \
+    Remove-Item C:\gsa\roots.sst -Force
 
 COPY install-fxserver.ps1 C:/gsa/install-fxserver.ps1
 COPY start-server.ps1     C:/gsa/start-server.ps1
