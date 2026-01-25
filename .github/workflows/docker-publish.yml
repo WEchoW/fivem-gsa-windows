@@ -50,18 +50,15 @@ jobs:
       - name: Verify start-server.ps1 is GSA-synced
         shell: pwsh
         run: |
-          docker run --rm --entrypoint powershell `
-            "${{ env.IMAGE }}:build" -NoProfile -ExecutionPolicy Bypass -Command `
-            "$c = Get-Content 'C:\gsa\start-server.ps1' -Raw; `
-             if ($c -match 'txAdminPort' -or $c -match 'txAdminInterface') { `
-               Write-Host '❌ Deprecated txAdmin convars still present'; exit 1 `
-             } elseif ($c -notmatch 'TXHOST_TXA_PORT' -or $c -notmatch 'FIVEM_GAME_PORT') { `
-               Write-Host '❌ Expected env vars missing'; exit 1 `
-             } elseif ($c -notmatch 'endpoint_add_udp' -or $c -notmatch 'endpoint_add_tcp') { `
-               Write-Host '❌ Game endpoint binding missing'; exit 1 `
-             } else { `
-               Write-Host '✅ Script is GSA-synced' `
-             }"
+          $cmd = @'
+          $c = Get-Content "C:\gsa\start-server.ps1" -Raw
+          if ($c -match "txAdminPort" -or $c -match "txAdminInterface") { Write-Host "❌ Deprecated txAdmin convars still present"; exit 1 }
+          if ($c -notmatch "TXHOST_TXA_PORT" -or $c -notmatch "FIVEM_GAME_PORT") { Write-Host "❌ Expected env vars missing"; exit 1 }
+          if ($c -notmatch "endpoint_add_udp" -or $c -notmatch "endpoint_add_tcp") { Write-Host "❌ Game endpoint binding missing"; exit 1 }
+          Write-Host "✅ Script is GSA-synced"
+          '@
+
+          docker run --rm --entrypoint powershell "${{ env.IMAGE }}:build" -NoProfile -ExecutionPolicy Bypass -Command $cmd
 
       - name: Tag image (latest + sha)
         shell: pwsh
