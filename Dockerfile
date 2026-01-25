@@ -17,8 +17,8 @@ WORKDIR C:/gsa
 # Update Windows root CA store for TLS downloads inside ServerCore
 RUN certutil -generateSSTFromWU C:\gsa\roots.sst; certutil -addstore -f root C:\gsa\roots.sst; Remove-Item C:\gsa\roots.sst -Force
 
-COPY install-fxserver.ps1 C:/gsa/install-fxserver.ps1
-COPY start-server.ps1     C:/gsa/start-server.ps1
+COPY install-fxserver.gsa.ps1 C:/gsa/install-fxserver.ps1
+COPY start-server.gsa.ps1     C:/gsa/start-server.ps1
 
 # EXPOSE is metadata only; GSA publishes ports from the blueprint.
 EXPOSE 30120/udp 30120/tcp 40120/tcp
