@@ -1,4 +1,4 @@
-# start-server.ps1
+# start-server.gsa.ps1
 $ErrorActionPreference = "Stop"
 
 $root = $env:FIVEM_ROOT
@@ -48,4 +48,5 @@ if (!(Test-Path $fx)) {
 Set-Location $tx
 
 # IMPORTANT: do NOT pass txAdminPort/txAdminInterface convars
+# txAdmin binds from TXHOST_* env vars, and FXServer binds game ports via endpoint_add_* below.
 & $fx +set "endpoint_add_tcp" "$endpoint" +set "endpoint_add_udp" "$endpoint"
