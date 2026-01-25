@@ -44,32 +44,20 @@ jobs:
         run: |
           docker build --no-cache -t "${{ env.IMAGE }}:build" .
 
-      # 🔍 REAL verification (prints offenders)
       - name: Verify start-server.ps1 is GSA-synced
         shell: pwsh
         run: |
           $cmd = @'
-          Write-Host "=== start-server.ps1 (first 120 lines) ==="
-          Get-Content "C:\gsa\start-server.ps1" -TotalCount 120
-
-          Write-Host "`n=== Searching for deprecated strings in C:\gsa ==="
-          Get-ChildItem "C:\gsa" -Recurse -File | ForEach-Object {
-            $p = $_.FullName
-            $t = Get-Content $p -Raw -ErrorAction SilentlyContinue
-            if ($t -match "txAdminPort" -or $t -match "txAdminInterface") {
-              Write-Host "FOUND in: $p"
-            }
-          }
-
           $c = Get-Content "C:\gsa\start-server.ps1" -Raw
 
-          if ($c -match "txAdminPort" -or $c -match "txAdminInterface") {
-            Write-Host "❌ Deprecated txAdmin convars still present"
+          # Fail only if deprecated convars are actually being SET (not just mentioned in comments)
+          if ($c -match '\+set\s+("?txAdminPort"?)' -or $c -match '\+set\s+("?txAdminInterface"?)') {
+            Write-Host "❌ Deprecated txAdmin convars are being used in launch args"
             exit 1
           }
 
           if ($c -notmatch "TXHOST_TXA_PORT" -or $c -notmatch "FIVEM_GAME_PORT") {
-            Write-Host "❌ Missing GSA env vars"
+            Write-Host "❌ Missing expected env vars"
             exit 1
           }
 
@@ -78,7 +66,7 @@ jobs:
             exit 1
           }
 
-          Write-Host "✅ start-server.ps1 is GSA synced"
+          Write-Host "✅ start-server.ps1 is GSA-synced"
           '@
 
           docker run --rm --entrypoint powershell "${{ env.IMAGE }}:build" -NoProfile -ExecutionPolicy Bypass -Command $cmd
