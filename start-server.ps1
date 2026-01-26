@@ -1,9 +1,10 @@
 # C:\gsa\start-server.ps1
 $ErrorActionPreference = "Stop"
 
-# If GSA generated env vars, we just run FXServer directly here.
 $homeRoot = $env:HOME_ROOT
 if ([string]::IsNullOrWhiteSpace($homeRoot)) { $homeRoot = "C:\gsa" }
+
+Write-Host "HOME_ROOT: $homeRoot"
 
 $serverfiles = Join-Path $homeRoot "serverfiles"
 $artifacts   = Join-Path $serverfiles "artifacts"
@@ -27,6 +28,10 @@ if (!(Test-Path $fxExe)) {
     Get-ChildItem -Path $artifacts -Recurse -File -ErrorAction SilentlyContinue |
       Unblock-File -ErrorAction SilentlyContinue
   } catch { }
+
+  if (!(Test-Path $fxExe)) {
+    throw "FXServer.exe not found after extraction into $artifacts"
+  }
 }
 
 Set-Location $artifacts
@@ -40,6 +45,7 @@ if ([string]::IsNullOrWhiteSpace($fivemPort)) { $fivemPort = "30120" }
 Write-Host "Starting FXServer (txAdmin wizard mode)"
 Write-Host "FXServer port: $fivemPort"
 Write-Host "txAdmin port: $txPort"
+Write-Host "Artifacts: $artifacts"
 
 & .\FXServer.exe +set netPort $fivemPort +set txAdminPort $txPort
 exit $LASTEXITCODE
