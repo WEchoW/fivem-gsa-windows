@@ -1,7 +1,8 @@
-# start-server.ps1 (txAdmin on 40120, GSA-synced, non-deprecated convars)
+# start-server.ps1 — FINAL FIXED (FXServer + txAdmin)
+
 $ErrorActionPreference = "Stop"
 
-# ---- REQUIRED ENVS (GSA verify expects these) ----
+# ---- REQUIRED ENVS ----
 $required = @(
   "FIVEM_ROOT","ARTIFACTS_DIR","TXDATA",
   "TXHOST_INTERFACE","TXHOST_TXA_PORT",
@@ -11,7 +12,7 @@ $required = @(
 foreach ($k in $required) {
   $v = [Environment]::GetEnvironmentVariable($k)
   if ([string]::IsNullOrWhiteSpace($v)) {
-    Write-Host "Missing expected env var: $k"
+    Write-Host "Missing env var: $k"
     exit 1
   }
 }
@@ -27,26 +28,25 @@ New-Item -ItemType Directory -Force -Path (Join-Path $tx "temp") | Out-Null
 
 $fx = Join-Path $artifacts "FXServer.exe"
 
+# Ensure FXServer exists
+if (!(Test-Path $fx)) {
+  Write-Host "Installing FXServer..."
+  & "C:\gsa\install-fxserver.ps1"
+}
+if (!(Test-Path $fx)) { throw "FXServer.exe missing after install." }
+
 $gameIface = $env:FIVEM_GAME_INTERFACE
 $gamePort  = [int]$env:FIVEM_GAME_PORT
 $endpoint  = "$gameIface`:$gamePort"
 
-# Force txAdmin to 40120 (per your requirement)
-$txIface = $env:TXHOST_INTERFACE
-$txaPort = 40120
+# 🔑 txAdmin FIX: bind to localhost internally
+$txIface = "127.0.0.1"
+$txaPort = [int]$env:TXHOST_TXA_PORT
 
-Write-Host "DEBUG FIVEM_ROOT=[$root] ARTIFACTS_DIR=[$artifacts] TXDATA=[$tx]"
-Write-Host "DEBUG Game endpoint_add_tcp/udp=[$endpoint]"
-Write-Host "DEBUG txAdmin bind (forced)=[$txIface`:$txaPort]"
+Write-Host "Starting FXServer + txAdmin"
+Write-Host " Game: $endpoint"
+Write-Host " txAdmin: $txIface`:$txaPort"
 
-# Ensure FXServer exists
-if (!(Test-Path $fx)) {
-  Write-Host "FXServer.exe missing at $fx - running installer..."
-  & "C:\gsa\install-fxserver.ps1"
-}
-if (!(Test-Path $fx)) { throw "Still missing FXServer.exe at $fx after install." }
-
-# Start FXServer (txAdmin is bundled). Use NON-deprecated convars.
 Set-Location $tx
 
 & $fx `
