@@ -1,8 +1,6 @@
-FROM mcr.microsoft.com/windows:2004-amd64
-
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
 SHELL ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
 
-# Download latest FXServer artifact (master) and VC++ 2019 redist
 RUN $ErrorActionPreference='Stop' ; \
     $base='https://runtime.fivem.net/artifacts/fivem/build_server_windows/master/' ; \
     $html = (Invoke-WebRequest -UseBasicParsing $base).Content ; \
@@ -15,7 +13,6 @@ SHELL ["cmd", "/S", "/C"]
 RUN VC_redist.x64.exe /install /quiet /norestart
 
 WORKDIR C:\\server-data
-
 EXPOSE 30120/tcp 30120/udp
 
 SHELL ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
