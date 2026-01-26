@@ -29,3 +29,4 @@ ENTRYPOINT cmd /S /C "C:\server\FXServer.exe +set sv_licenseKey %SV_LICENSE% +ex
 
 
 
+
