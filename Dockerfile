@@ -25,4 +25,7 @@ WORKDIR C:\\server-data
 EXPOSE 30120/tcp 30120/udp
 
 # ---- Start server (expand env vars via cmd) ----
-ENTRYPOINT C:\server\FXServer.exe +set sv_licenseKey %SV_LICENSE% +exec server.cfg
+ENTRYPOINT cmd /S /C "C:\server\FXServer.exe +set sv_licenseKey %SV_LICENSE% +exec C:\server-data\server.cfg"
+
+
+
