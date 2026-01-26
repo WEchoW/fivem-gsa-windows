@@ -1,0 +1,16 @@
+services:
+  fivem:
+    image: ghcr.io/YOUR_GITHUB_USER/fivem-docker:latest
+    container_name: fivem
+    ports:
+      - "30120:30120/tcp"
+      - "30120:30120/udp"
+      - "40120:40120/tcp"
+    environment:
+      HOME_ROOT: "C:\\gsa"
+      TXADMIN_PORT: "40120"
+      ARTIFACT_URL: "https://runtime.fivem.net/artifacts/fivem/build_server_windows/master/24769-315823736cfbc085104ca0d32779311cd2f1a5a8/server.7z"
+    volumes:
+      # Mount ONLY artifacts to match your requirement:
+      # Host GSA container path -> {container.home_root}\serverfiles\artifacts
+      - "C:/GameServerApp/containers/nspgwypvh/serverfiles/artifacts:C:/gsa/serverfiles/artifacts"
