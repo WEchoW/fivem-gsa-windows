@@ -30,7 +30,7 @@ jobs:
           $image = "ghcr.io/$owner/fivem-windows-fxserver"
           $tag = "v${{ github.run_number }}"
 
-          docker build -t "$image:latest" -t "$image:$tag" .
+          docker build -t "${image}:latest" -t "${image}:${tag}" .
 
       - name: Push image
         shell: pwsh
@@ -39,5 +39,5 @@ jobs:
           $image = "ghcr.io/$owner/fivem-windows-fxserver"
           $tag = "v${{ github.run_number }}"
 
-          docker push "$image:latest"
-          docker push "$image:$tag"
+          docker push "${image}:latest"
+          docker push "${image}:${tag}"
