@@ -24,13 +24,20 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build image
+        shell: pwsh
         run: |
-          $TAG="v${{ github.run_number }}"
-          docker build -t ghcr.io/${{ github.repository_owner }}/fivem-windows-fxserver:latest `
-                       -t ghcr.io/${{ github.repository_owner }}/fivem-windows-fxserver:$TAG .
+          $owner = "${{ github.repository_owner }}".ToLower()
+          $image = "ghcr.io/$owner/fivem-windows-fxserver"
+          $tag = "v${{ github.run_number }}"
+
+          docker build -t "$image:latest" -t "$image:$tag" .
 
       - name: Push image
+        shell: pwsh
         run: |
-          $TAG="v${{ github.run_number }}"
-          docker push ghcr.io/${{ github.repository_owner }}/fivem-windows-fxserver:latest
-          docker push ghcr.io/${{ github.repository_owner }}/fivem-windows-fxserver:$TAG
+          $owner = "${{ github.repository_owner }}".ToLower()
+          $image = "ghcr.io/$owner/fivem-windows-fxserver"
+          $tag = "v${{ github.run_number }}"
+
+          docker push "$image:latest"
+          docker push "$image:$tag"
