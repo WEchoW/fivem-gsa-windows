@@ -22,6 +22,8 @@ RUN VC_redist.x64.exe /install /quiet /norestart && del VC_redist.x64.exe
 WORKDIR C:\\server-data
 EXPOSE 30120/tcp 30120/udp
 
-ENTRYPOINT cmd /S /C "C:\server\FXServer.exe +exec C:\server-data\server.cfg"
+ENTRYPOINT cmd /S /C "C:\server\FXServer.exe +set sv_licenseKey %SV_LICENSE% +exec C:\server-data\server.cfg"
+
+
 
 
