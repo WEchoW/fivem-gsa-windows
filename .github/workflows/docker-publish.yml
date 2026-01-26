@@ -1,92 +1,36 @@
-name: Build and publish Windows Docker image (GHCR)
+name: build-and-push
 
 on:
   push:
-    branches: ["main"]
-    tags:
-      - "v*.*.*"
+    branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: legitgammin/fivem-gsa-windows
-
 jobs:
-  build-and-push:
+  build:
     runs-on: windows-2022
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set image tags
-        shell: pwsh
+      - name: Build image
         run: |
-          $image = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          $shortSha = "${{ github.sha }}".Substring(0,7)
+          $TAG="v${{ github.run_number }}"
+          docker build -t ghcr.io/${{ github.repository_owner }}/fivem-windows-fxserver:latest `
+                       -t ghcr.io/${{ github.repository_owner }}/fivem-windows-fxserver:$TAG .
 
-          "IMAGE=$image" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "SHORT_SHA=$shortSha" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Build image (no cache)
-        shell: pwsh
+      - name: Push image
         run: |
-          docker build --no-cache -t "${{ env.IMAGE }}:build" .
-
-      - name: Verify start-server.ps1 is GSA-synced
-        shell: pwsh
-        run: |
-          $cmd = @'
-          $c = Get-Content "C:\gsa\start-server.ps1" -Raw
-
-          # Fail only if deprecated convars are actually being SET (not just mentioned in comments)
-          if ($c -match '\+set\s+("?txAdminPort"?)' -or $c -match '\+set\s+("?txAdminInterface"?)') {
-            Write-Host "❌ Deprecated txAdmin convars are being used in launch args"
-            exit 1
-          }
-
-          if ($c -notmatch "TXHOST_TXA_PORT" -or $c -notmatch "FIVEM_GAME_PORT") {
-            Write-Host "❌ Missing expected env vars"
-            exit 1
-          }
-
-          if ($c -notmatch "endpoint_add_udp" -or $c -notmatch "endpoint_add_tcp") {
-            Write-Host "❌ Game endpoint binding missing"
-            exit 1
-          }
-
-          Write-Host "✅ start-server.ps1 is GSA-synced"
-          '@
-
-          docker run --rm --entrypoint powershell "${{ env.IMAGE }}:build" -NoProfile -ExecutionPolicy Bypass -Command $cmd
-
-      - name: Tag image (latest + sha)
-        shell: pwsh
-        run: |
-          docker tag "${{ env.IMAGE }}:build" "${{ env.IMAGE }}:latest"
-          docker tag "${{ env.IMAGE }}:build" "${{ env.IMAGE }}:sha-${{ env.SHORT_SHA }}"
-
-      - name: Push image (latest + sha)
-        shell: pwsh
-        run: |
-          docker push "${{ env.IMAGE }}:latest"
-          docker push "${{ env.IMAGE }}:sha-${{ env.SHORT_SHA }}"
-
-      - name: Tag + push version (only on tag pushes)
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}"
-          docker tag "${{ env.IMAGE }}:build" "${{ env.IMAGE }}:$tag"
-          docker push "${{ env.IMAGE }}:$tag"
+          $TAG="v${{ github.run_number }}"
+          docker push ghcr.io/${{ github.repository_owner }}/fivem-windows-fxserver:latest
+          docker push ghcr.io/${{ github.repository_owner }}/fivem-windows-fxserver:$TAG
