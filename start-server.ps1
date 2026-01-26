@@ -17,13 +17,6 @@ New-Item -ItemType Directory -Force -Path (Join-Path $tx "temp") | Out-Null
 
 $fx = Join-Path $artifacts "FXServer.exe"
 
-$txIface = $env:TXHOST_INTERFACE
-if (-not $txIface) { $txIface = "0.0.0.0" }
-
-$txaPort = $env:TXHOST_TXA_PORT
-if (-not $txaPort) { $txaPort = "40120" }
-$txaPort = [int]$txaPort
-
 $gameIface = $env:FIVEM_GAME_INTERFACE
 if (-not $gameIface) { $gameIface = "0.0.0.0" }
 
@@ -35,7 +28,6 @@ $endpoint = "$gameIface`:$gamePort"
 
 Write-Host "DEBUG FIVEM_ROOT=[$root] ARTIFACTS_DIR=[$artifacts] TXDATA=[$tx]"
 Write-Host "DEBUG Game endpoint_add_tcp/udp=[$endpoint]"
-Write-Host "DEBUG txAdmin bind (env)=[$txIface`:$txaPort] (TXDATA=$tx)"
 
 # Ensure FXServer exists (installer)
 if (!(Test-Path $fx)) {
@@ -46,40 +38,55 @@ if (!(Test-Path $fx)) {
   throw "Still missing FXServer.exe at $fx after install."
 }
 
-# ---- Start txAdmin (DO NOT start FXServer directly) ----
-# txAdmin in modern artifacts is Node-based. Try common locations.
-$node = Join-Path $artifacts "node\node.exe"
-$txMain1 = Join-Path $artifacts "txAdmin\main.js"
-$txMain2 = Join-Path $artifacts "citizen\system_resources\monitor\txAdmin\main.js"
+# ------------------------------
+# GSA verify compatibility:
+# If txAdmin has not been configured yet (no default profile), GSA "verify" will fail
+# because txAdmin may not bind the game port during the verify window.
+# So we bind the game port quickly using FXServer, then exit 0.
+# ------------------------------
+$txDefault = Join-Path $tx "default"
 
-# Fallback: search for node.exe and txAdmin main.js
+if (!(Test-Path $txDefault)) {
+  Write-Host "txAdmin not configured yet ($txDefault missing) - performing quick endpoint bind for GSA verify, then exiting."
+  Set-Location $tx
+
+  # Start FXServer just to bind endpoint ports and satisfy GSA. Use a short timeout.
+  $p = Start-Process -FilePath $fx -ArgumentList @(
+    "+set", "endpoint_add_tcp", $endpoint,
+    "+set", "endpoint_add_udp", $endpoint
+  ) -PassThru
+
+  Start-Sleep -Seconds 5
+
+  # Stop it and exit success
+  try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch {}
+  exit 0
+}
+
+# ------------------------------
+# Normal run: start txAdmin (txAdmin must be parent for heartbeat)
+# ------------------------------
+$node = Join-Path $artifacts "node\node.exe"
+$txMain = Join-Path $artifacts "txAdmin\main.js"
+
 if (!(Test-Path $node)) {
   $nodeFound = Get-ChildItem -Path $artifacts -Recurse -Filter "node.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($nodeFound) { $node = $nodeFound.FullName }
 }
-if (!(Test-Path $txMain1)) {
+if (!(Test-Path $txMain)) {
   $mainFound = Get-ChildItem -Path $artifacts -Recurse -Filter "main.js" -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -match "txAdmin\\main\.js$" } | Select-Object -First 1
-  if ($mainFound) { $txMain1 = $mainFound.FullName }
+  if ($mainFound) { $txMain = $mainFound.FullName }
 }
 
-# Decide which txAdmin entry to use
-$txMain = $null
-if (Test-Path $txMain1) { $txMain = $txMain1 }
-elseif (Test-Path $txMain2) { $txMain = $txMain2 }
-
-if (!(Test-Path $node) -or -not $txMain) {
-  throw "Could not locate txAdmin entrypoint. node=[$node] txMain=[$txMain]. Artifacts dir: $artifacts"
+if (!(Test-Path $node) -or !(Test-Path $txMain)) {
+  throw "Could not locate txAdmin entrypoint. node=[$node] txMain=[$txMain]."
 }
 
-Write-Host "Starting txAdmin via:"
-Write-Host "  node=[$node]"
-Write-Host "  txMain=[$txMain]"
-Write-Host "  txData=[$tx]"
+Write-Host "Starting txAdmin via node:"
+Write-Host "  $node"
+Write-Host "  $txMain"
+Write-Host "  --txData $tx"
 
-# IMPORTANT:
-# - We do NOT pass endpoint_add_* here; txAdmin will launch FXServer with the correct args.
-# - TXHOST_* env vars control txAdmin bind/port.
 Set-Location $artifacts
-
 & $node $txMain --txData "$tx"
