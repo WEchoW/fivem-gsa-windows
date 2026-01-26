@@ -38,10 +38,14 @@ Set-Location $artifacts
 $txPort = $env:TXADMIN_PORT
 if ([string]::IsNullOrWhiteSpace($txPort)) { $txPort = "40120" }
 
+$fivemPort = $env:FIVEM_PORT
+if ([string]::IsNullOrWhiteSpace($fivemPort)) { $fivemPort = "30120" }
+
 Write-Host "Starting FXServer (txAdmin wizard mode)"
+Write-Host "FXServer port: $fivemPort"
 Write-Host "txAdmin port: $txPort"
 Write-Host "Artifacts: $artifacts"
 
 # Run and propagate exit code
-& .\FXServer.exe +set txAdminPort $txPort
+& .\FXServer.exe +set netPort $fivemPort +set txAdminPort $txPort
 exit $LASTEXITCODE
