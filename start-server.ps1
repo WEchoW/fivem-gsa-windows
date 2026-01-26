@@ -14,8 +14,10 @@ $required = @(
 
 $missing = @()
 foreach ($k in $required) {
-  if ([string]::IsNullOrWhiteSpace($env:$k)) { $missing += $k }
+  $v = [Environment]::GetEnvironmentVariable($k)
+  if ([string]::IsNullOrWhiteSpace($v)) { $missing += $k }
 }
+
 if ($missing.Count -gt 0) {
   Write-Host "Missing expected env vars: $($missing -join ', ')"
   exit 1
