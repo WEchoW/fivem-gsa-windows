@@ -1,14 +1,30 @@
 # start-server.gsa.ps1
 $ErrorActionPreference = "Stop"
 
-$root = $env:FIVEM_ROOT
-if (-not $root) { $root = "C:\FiveM" }
+# --- GSA validator expects these env vars to exist ---
+$required = @(
+  "FIVEM_ROOT",
+  "ARTIFACTS_DIR",
+  "TXDATA",
+  "TXHOST_INTERFACE",
+  "TXHOST_TXA_PORT",
+  "FIVEM_GAME_INTERFACE",
+  "FIVEM_GAME_PORT"
+)
 
+$missing = @()
+foreach ($k in $required) {
+  if ([string]::IsNullOrWhiteSpace($env:$k)) { $missing += $k }
+}
+if ($missing.Count -gt 0) {
+  Write-Host "Missing expected env vars: $($missing -join ', ')"
+  exit 1
+}
+
+# --- Use env vars (no silent defaults, to satisfy GSA assumptions) ---
+$root      = $env:FIVEM_ROOT
 $artifacts = $env:ARTIFACTS_DIR
-if (-not $artifacts) { $artifacts = Join-Path $root "artifacts" }
-
-$tx = $env:TXDATA
-if (-not $tx) { $tx = Join-Path $root "txData" }
+$tx        = $env:TXDATA
 
 New-Item -ItemType Directory -Force -Path $root | Out-Null
 New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
@@ -18,16 +34,12 @@ New-Item -ItemType Directory -Force -Path (Join-Path $tx "temp") | Out-Null
 $fx = Join-Path $artifacts "FXServer.exe"
 
 $gameIface = $env:FIVEM_GAME_INTERFACE
-if (-not $gameIface) { $gameIface = "0.0.0.0" }
-
-$gamePort = $env:FIVEM_GAME_PORT
-if (-not $gamePort) { $gamePort = "30120" }
-$gamePort = [int]$gamePort
-
-$endpoint = "$gameIface`:$gamePort"
+$gamePort  = [int]$env:FIVEM_GAME_PORT
+$endpoint  = "$gameIface`:$gamePort"
 
 Write-Host "DEBUG FIVEM_ROOT=[$root] ARTIFACTS_DIR=[$artifacts] TXDATA=[$tx]"
 Write-Host "DEBUG Game endpoint_add_tcp/udp=[$endpoint]"
+Write-Host "DEBUG txAdmin bind (env)=[$($env:TXHOST_INTERFACE):$($env:TXHOST_TXA_PORT)]"
 
 # Ensure FXServer exists (installer)
 if (!(Test-Path $fx)) {
@@ -38,35 +50,24 @@ if (!(Test-Path $fx)) {
   throw "Still missing FXServer.exe at $fx after install."
 }
 
-# ------------------------------
-# GSA verify compatibility:
-# If txAdmin has not been configured yet (no default profile), GSA "verify" will fail
-# because txAdmin may not bind the game port during the verify window.
-# So we bind the game port quickly using FXServer, then exit 0.
-# ------------------------------
+# --- GSA verify compatibility: bind game port briefly if txAdmin not configured ---
 $txDefault = Join-Path $tx "default"
-
 if (!(Test-Path $txDefault)) {
-  Write-Host "txAdmin not configured yet ($txDefault missing) - performing quick endpoint bind for GSA verify, then exiting."
+  Write-Host "txAdmin not configured yet ($txDefault missing) - quick endpoint bind for GSA verify, then exit 0."
   Set-Location $tx
 
-  # Start FXServer just to bind endpoint ports and satisfy GSA. Use a short timeout.
   $p = Start-Process -FilePath $fx -ArgumentList @(
     "+set", "endpoint_add_tcp", $endpoint,
     "+set", "endpoint_add_udp", $endpoint
   ) -PassThru
 
   Start-Sleep -Seconds 5
-
-  # Stop it and exit success
   try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch {}
   exit 0
 }
 
-# ------------------------------
-# Normal run: start txAdmin (txAdmin must be parent for heartbeat)
-# ------------------------------
-$node = Join-Path $artifacts "node\node.exe"
+# --- Normal run: start txAdmin (parent process for FXServer/heartbeat) ---
+$node   = Join-Path $artifacts "node\node.exe"
 $txMain = Join-Path $artifacts "txAdmin\main.js"
 
 if (!(Test-Path $node)) {
@@ -82,11 +83,6 @@ if (!(Test-Path $txMain)) {
 if (!(Test-Path $node) -or !(Test-Path $txMain)) {
   throw "Could not locate txAdmin entrypoint. node=[$node] txMain=[$txMain]."
 }
-
-Write-Host "Starting txAdmin via node:"
-Write-Host "  $node"
-Write-Host "  $txMain"
-Write-Host "  --txData $tx"
 
 Set-Location $artifacts
 & $node $txMain --txData "$tx"
