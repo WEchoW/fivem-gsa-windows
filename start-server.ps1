@@ -1,15 +1,11 @@
 # start-server.gsa.ps1
 $ErrorActionPreference = "Stop"
 
-# --- GSA validator expects these env vars to exist ---
+# ---- REQUIRED ENVS (GSA verify) ----
 $required = @(
-  "FIVEM_ROOT",
-  "ARTIFACTS_DIR",
-  "TXDATA",
-  "TXHOST_INTERFACE",
-  "TXHOST_TXA_PORT",
-  "FIVEM_GAME_INTERFACE",
-  "FIVEM_GAME_PORT"
+  "FIVEM_ROOT","ARTIFACTS_DIR","TXDATA",
+  "TXHOST_INTERFACE","TXHOST_TXA_PORT",
+  "FIVEM_GAME_INTERFACE","FIVEM_GAME_PORT"
 )
 
 $missing = @()
@@ -17,13 +13,11 @@ foreach ($k in $required) {
   $v = [Environment]::GetEnvironmentVariable($k)
   if ([string]::IsNullOrWhiteSpace($v)) { $missing += $k }
 }
-
 if ($missing.Count -gt 0) {
   Write-Host "Missing expected env vars: $($missing -join ', ')"
   exit 1
 }
 
-# --- Use env vars (no silent defaults, to satisfy GSA assumptions) ---
 $root      = $env:FIVEM_ROOT
 $artifacts = $env:ARTIFACTS_DIR
 $tx        = $env:TXDATA
@@ -43,48 +37,39 @@ Write-Host "DEBUG FIVEM_ROOT=[$root] ARTIFACTS_DIR=[$artifacts] TXDATA=[$tx]"
 Write-Host "DEBUG Game endpoint_add_tcp/udp=[$endpoint]"
 Write-Host "DEBUG txAdmin bind (env)=[$($env:TXHOST_INTERFACE):$($env:TXHOST_TXA_PORT)]"
 
-# Ensure FXServer exists (installer)
+# Ensure FXServer exists
 if (!(Test-Path $fx)) {
   Write-Host "FXServer.exe missing at $fx - running installer..."
   & "C:\gsa\install-fxserver.ps1"
 }
-if (!(Test-Path $fx)) {
-  throw "Still missing FXServer.exe at $fx after install."
-}
+if (!(Test-Path $fx)) { throw "Still missing FXServer.exe at $fx after install." }
 
-# --- GSA verify compatibility: bind game port briefly if txAdmin not configured ---
-$txDefault = Join-Path $tx "default"
-if (!(Test-Path $txDefault)) {
-  Write-Host "txAdmin not configured yet ($txDefault missing) - quick endpoint bind for GSA verify, then exit 0."
-  Set-Location $tx
-
-  $p = Start-Process -FilePath $fx -ArgumentList @(
-    "+set", "endpoint_add_tcp", $endpoint,
-    "+set", "endpoint_add_udp", $endpoint
-  ) -PassThru
-
-  Start-Sleep -Seconds 5
-  try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch {}
-  exit 0
-}
-
-# --- Normal run: start txAdmin (parent process for FXServer/heartbeat) ---
+# --- Try to locate txAdmin (optional) ---
 $node   = Join-Path $artifacts "node\node.exe"
-$txMain = Join-Path $artifacts "txAdmin\main.js"
+$txMain = $null
 
-if (!(Test-Path $node)) {
-  $nodeFound = Get-ChildItem -Path $artifacts -Recurse -Filter "node.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($nodeFound) { $node = $nodeFound.FullName }
-}
-if (!(Test-Path $txMain)) {
-  $mainFound = Get-ChildItem -Path $artifacts -Recurse -Filter "main.js" -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -match "txAdmin\\main\.js$" } | Select-Object -First 1
-  if ($mainFound) { $txMain = $mainFound.FullName }
-}
+# common txAdmin locations (if present)
+$txCandidates = @(
+  (Join-Path $artifacts "txAdmin\main.js"),
+  (Join-Path $artifacts "citizen\system_resources\monitor\txAdmin\main.js")
+)
 
-if (!(Test-Path $node) -or !(Test-Path $txMain)) {
-  throw "Could not locate txAdmin entrypoint. node=[$node] txMain=[$txMain]."
+foreach ($c in $txCandidates) {
+  if (Test-Path $c) { $txMain = $c; break }
 }
 
+# If txAdmin is NOT present, fall back to FXServer direct (do NOT crash)
+if (-not $txMain -or !(Test-Path $node)) {
+  Write-Host "txAdmin not present in artifacts. Starting FXServer directly (no txAdmin heartbeat)."
+  Set-Location $tx
+  & $fx +set "endpoint_add_tcp" "$endpoint" +set "endpoint_add_udp" "$endpoint"
+  exit $LASTEXITCODE
+}
+
+# If txAdmin IS present, start it (txAdmin will spawn FXServer)
+Write-Host "Starting txAdmin via node:"
+Write-Host "  node=[$node]"
+Write-Host "  txMain=[$txMain]"
+Write-Host "  --txData $tx"
 Set-Location $artifacts
 & $node $txMain --txData "$tx"
