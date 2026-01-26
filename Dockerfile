@@ -25,4 +25,6 @@ WORKDIR C:\\server-data
 EXPOSE 30120/tcp 30120/udp
 
 SHELL ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
-ENTRYPOINT ["C:\\server\\FXServer.exe", "+exec", "server.cfg"]
+ENTRYPOINT ["C:\\server\\FXServer.exe", "+set", "sv_licenseKey", "%SV_LICENSE%", "+exec", "server.cfg"]
+
+
