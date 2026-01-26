@@ -25,6 +25,12 @@ if (!(Test-Path $fxExe)) {
   if (!(Test-Path $fxExe)) {
     throw "FXServer.exe not found after extraction."
   }
+
+  # Remove "downloaded from internet" flag if present (safe if not present)
+  try {
+    Get-ChildItem -Path $artifacts -Recurse -File -ErrorAction SilentlyContinue |
+      Unblock-File -ErrorAction SilentlyContinue
+  } catch { }
 }
 
 Set-Location $artifacts
@@ -34,5 +40,8 @@ if ([string]::IsNullOrWhiteSpace($txPort)) { $txPort = "40120" }
 
 Write-Host "Starting FXServer (txAdmin wizard mode)"
 Write-Host "txAdmin port: $txPort"
+Write-Host "Artifacts: $artifacts"
 
-.\FXServer.exe +set txAdminPort $txPort
+# Run and propagate exit code
+& .\FXServer.exe +set txAdminPort $txPort
+exit $LASTEXITCODE
